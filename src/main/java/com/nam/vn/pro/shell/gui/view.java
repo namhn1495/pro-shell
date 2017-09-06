@@ -38,6 +38,8 @@ import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
+import org.apache.spark.SparkConf;
+import org.apache.spark.api.java.JavaSparkContext;
 
 /**
  *
@@ -46,12 +48,13 @@ import org.apache.hadoop.fs.Path;
 public class view extends javax.swing.JFrame {
 
     private String columnName[] = {"name", "isDirectory"};
-    private String root = ".";
-    private String dic = ".";
+    private String root = "/";
+    private String dic = "/";
     private List<FileStatus> data;
     private Map<String, String> servers;
     private FileSystem fs;
     private int rowRightClickSelect = 0;
+    private JavaSparkContext sc;
     /**
      * Creates new form view
      */
@@ -63,7 +66,18 @@ public class view extends javax.swing.JFrame {
         fileSystemConfig("localhost");
         System.out.println(command("ls", root));
         initData();
+        initContext();
+        this.pack();
 
+    }
+    /***
+     * NEW
+     */
+    private void initContext(){
+        SparkConf conf = new SparkConf();
+        conf.setAppName("Shell");
+        conf.setMaster("local[*]");
+        sc = new JavaSparkContext(conf);
     }
 
     private void initSize() {
@@ -105,10 +119,10 @@ public class view extends javax.swing.JFrame {
 
             @Override
             public void actionPerformed(ActionEvent e) {
-                if(rowRightClickSelect > 0){
-                    System.out.println("DELETE "+rowRightClickSelect);
+                if (rowRightClickSelect > 0) {
+                    System.out.println("DELETE " + rowRightClickSelect);
                 }
-                
+
             }
         });
         popupMenu.add(deleteItem);
@@ -151,6 +165,7 @@ public class view extends javax.swing.JFrame {
     }
 
     private void loadData() throws IOException {
+        try{
         FileStatus[] files = fs.listStatus(new Path(dic));
         data = Arrays.asList(files);
         String vec[][] = new String[files.length + 1][2];
@@ -162,20 +177,55 @@ public class view extends javax.swing.JFrame {
         DefaultTableModel model = (DefaultTableModel) table.getModel();
         model.setDataVector(vec, columnName);
         model.fireTableDataChanged();
+        }catch(Exception e){
+            dic = dic.substring(0,dic.lastIndexOf("/"));
+            if(dic.equals("")) dic = "/";
+            e.printStackTrace();
+        }
     }
-
+    
+       /***
+     * NEW
+     */
+    private void loadFile(String path){
+        List<String> list = sc.textFile(path)
+                .take(10);
+        updateConsole(list);
+        updateConsole("gaga","fafe");
+    }
+    private void updateConsole(List<String> arg){
+        for(String s: arg){
+            console.append(s+"\n");
+        }
+    }
+    private void updateConsole(String... arg){
+        for(String s: arg){
+            console.append(s+"\n");
+        }
+    }
+    
+    
+    
     private void changeFolder(int index) throws IOException {
         if (index != 0) {
             FileStatus file = data.get(index - 1);
             if (file.isDirectory()) {
-                dic += "/" + file.getPath().getName();
+                if (!dic.equals(root)) {
+                    dic += "/" + file.getPath().getName();
+                }else{
+                    dic += file.getPath().getName();
+                }
                 loadData();
-            }else{
+            } else {
                 txt_input.setText(file.getPath().toString());
+                loadFile(file.getPath().toString());
             }
         } else {
             if (!dic.equals(root)) {
                 dic = dic.substring(0, dic.lastIndexOf("/"));
+                if(dic.equals("")){
+                    dic = "/";
+                }
                 loadData();
             }
         }
@@ -198,7 +248,6 @@ public class view extends javax.swing.JFrame {
             conf.set("fs.defaultFS", servers.get(serverName));
         }
         fs = FileSystem.newInstance(conf);
-        root = servers.get(serverName);
         System.out.println("Root: " + root);
     }
 
@@ -246,14 +295,18 @@ public class view extends javax.swing.JFrame {
     private void initComponents() {
 
         txt_input = new javax.swing.JTextField();
-        ta_cmd = new java.awt.TextArea();
+        console = new java.awt.TextArea();
         jScrollPane1 = new javax.swing.JScrollPane();
         table = new javax.swing.JTable();
         txt_folder = new javax.swing.JTextField();
         jButton1 = new javax.swing.JButton();
         jButton2 = new javax.swing.JButton();
+        jComboBox1 = new javax.swing.JComboBox<>();
 
         setDefaultCloseOperation(javax.swing.WindowConstants.EXIT_ON_CLOSE);
+
+        console.setBackground(new java.awt.Color(0, 43, 54));
+        console.setForeground(new java.awt.Color(131, 148, 150));
 
         table.setModel(new javax.swing.table.DefaultTableModel(
             new Object [][] {
@@ -277,13 +330,17 @@ public class view extends javax.swing.JFrame {
 
         jButton2.setText("jButton2");
 
+        jComboBox1.setModel(new javax.swing.DefaultComboBoxModel<>(new String[] { "Item 1", "Item 2", "Item 3", "Item 4" }));
+
         javax.swing.GroupLayout layout = new javax.swing.GroupLayout(getContentPane());
         getContentPane().setLayout(layout);
         layout.setHorizontalGroup(
             layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
-            .addComponent(ta_cmd, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
+            .addComponent(console, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
             .addComponent(jScrollPane1, javax.swing.GroupLayout.Alignment.TRAILING, javax.swing.GroupLayout.DEFAULT_SIZE, 686, Short.MAX_VALUE)
             .addGroup(layout.createSequentialGroup()
+                .addComponent(jComboBox1, javax.swing.GroupLayout.PREFERRED_SIZE, 119, javax.swing.GroupLayout.PREFERRED_SIZE)
+                .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
                 .addComponent(txt_folder)
                 .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
                 .addComponent(jButton1))
@@ -297,7 +354,8 @@ public class view extends javax.swing.JFrame {
             .addGroup(layout.createSequentialGroup()
                 .addGroup(layout.createParallelGroup(javax.swing.GroupLayout.Alignment.BASELINE)
                     .addComponent(txt_folder, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)
-                    .addComponent(jButton1))
+                    .addComponent(jButton1)
+                    .addComponent(jComboBox1, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE))
                 .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
                 .addComponent(jScrollPane1, javax.swing.GroupLayout.DEFAULT_SIZE, 296, Short.MAX_VALUE)
                 .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.UNRELATED)
@@ -305,7 +363,7 @@ public class view extends javax.swing.JFrame {
                     .addComponent(txt_input, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)
                     .addComponent(jButton2))
                 .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
-                .addComponent(ta_cmd, javax.swing.GroupLayout.PREFERRED_SIZE, 258, javax.swing.GroupLayout.PREFERRED_SIZE))
+                .addComponent(console, javax.swing.GroupLayout.PREFERRED_SIZE, 258, javax.swing.GroupLayout.PREFERRED_SIZE))
         );
 
         pack();
@@ -317,14 +375,11 @@ public class view extends javax.swing.JFrame {
             if (folder != null && !folder.equals("")) {
                 Path path = new Path(folder);
                 dic = path.toString();
-                if(dic.charAt(0) != '.'){
-                    dic = "." +dic;
+                if (dic.charAt(0) != '/') {
+                    dic = "/" + dic;
                 }
-                if(dic.charAt(1) != '/'){
-                    dic = "./" + dic.substring(1);
-                }
-                if (dic.equals("./")) {
-                    dic = ".";
+                if(dic.equals("")){
+                    dic = "/";
                 }
                 txt_folder.setText(dic);
             }
@@ -376,10 +431,11 @@ public class view extends javax.swing.JFrame {
     }
 
     // Variables declaration - do not modify//GEN-BEGIN:variables
+    private java.awt.TextArea console;
     private javax.swing.JButton jButton1;
     private javax.swing.JButton jButton2;
+    private javax.swing.JComboBox<String> jComboBox1;
     private javax.swing.JScrollPane jScrollPane1;
-    private java.awt.TextArea ta_cmd;
     private javax.swing.JTable table;
     private javax.swing.JTextField txt_folder;
     private javax.swing.JTextField txt_input;
